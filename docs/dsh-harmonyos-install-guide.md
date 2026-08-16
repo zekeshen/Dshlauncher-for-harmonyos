@@ -209,6 +209,8 @@ tail -50 ~/.dsh/dsh-web-8080.log                # 看日志
 | 7 | `EPERM: operation not permitted, link ...` | hmfs 禁止硬链接 | session-persistence 的 link→rename 回退补丁 |
 | 8 | `credentials-local: ... readable beyond its owner (mode 660)` | hmfs 强制 660 且 chmod 无效 | credentials-local 加 openharmony 豁免 |
 | 9 | 沙箱不可用(命令无法执行) | HarmonyOS 不在 dsh 沙箱平台链 | 配置 `DSH_PERMISSION_MODE=danger-full-access`(见仓库 README) |
+| 10 | dsh 临时文件散落在家目录根 | TMPDIR 默认指向 home | `export TMPDIR="$HOME/.dsh-tmp"`（启动脚本 start-dsh-web.sh 已内置） |
+| 11 | 插件市场点"更新"没反应 / 静默 Already up to date | pnpm ≥10 的 minimumReleaseAge 冷静期 | `dsh plugin --profile web add <包>@<确切版本>` 绕过 latest 解析，或把版本加入 pnpm-workspace.yaml 的 minimumReleaseAgeExclude |
 
 ---
 
