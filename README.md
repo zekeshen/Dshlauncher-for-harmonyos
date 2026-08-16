@@ -1,11 +1,12 @@
 # DSH Launcher
 
 把 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）的 Web GUI 装进鸿蒙原生应用的极简壳。
+本项目完全由鸿蒙端DSH在matepad edge（api26.0.0）端全程生成，未做其他设备的适配验证，本仓库的操作流程与项目文件完全由dsh生成，安装及使用前请自行甄别。
 
 - 零打包、零原生代码：一个 ArkTS 页面 + ArkWeb 组件，加载 dsh web 的前端
 - 仅连接本机 `127.0.0.1:8080`（出于安全考虑，不支持远程地址配置）
 - 自动探测后端：连不上时显示提示页 + 一键重试，恢复后自动进入
-- 适配：HarmonyOS API 23+（`6.1.0(23)`），deviceTypes `2in1`（也可改 phone/tablet）
+- 适配：HarmonyOS API 23+（`6.1.0(23)`），deviceTypes `2in1`
 
 ```
 ┌─────────────────────────┐        ┌──────────────────────────┐
@@ -87,7 +88,6 @@ curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/   # 期望 200
 | 问题 | 解决 |
 |---|---|
 | `Metadata validation failed` | HAP 未正确签名。IDE 里 Build → Clean Project 后重新 Sync + Run；确认 build-profile.json5 的 signingConfigs 已由自动签名填充 |
-| 安装后桌面没有图标 | `entry/src/main/module.json5` 的 deviceTypes 改为 `["phone","tablet","2in1"]` 重构建 |
 | 提示无法连接 | 确认 dsh web 已在本机启动：`curl http://127.0.0.1:8080`；部署问题看上面的两份文档 |
 | WebView 白屏但探针显示已连接 | 检查 dsh web 日志（`~/.dsh/dsh-web-8080.log`），确认前端资源完整 |
 
