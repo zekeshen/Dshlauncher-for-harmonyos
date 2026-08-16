@@ -6,6 +6,11 @@
 
 ---
 
+> **内容来源与署名**：本文「附录」的操作方法与脚本说明提炼自
+> [dsh-harmonyos-deploy](https://atomgit.com/u010189254/dsh-harmonyos-deploy)
+> （MIT License，Copyright (c) 2026 dsh-harmonyos-deploy contributors）。
+> 使用其中内容时请保留本署名与原始许可说明。
+
 ## 一、环境要求
 
 | 项 | 要求 | 本机实测 |
@@ -54,11 +59,13 @@ sh ~/.dsh/start-dsh-web.sh
 
 ### 3.1 部署辅助脚本(从 GitHub 仓库获取)
 
-参考仓库:`dsh-harmonyos-deploy`(收录了启动脚本、koffi 补丁、自启脚本)。
+参考仓库:[dsh-harmonyos-deploy](https://atomgit.com/u010189254/dsh-harmonyos-deploy)
+(MIT License,Copyright (c) 2026 dsh-harmonyos-deploy contributors)。
+克隆: `git clone https://atomgit.com/u010189254/dsh-harmonyos-deploy.git`
 
 ```sh
 mkdir -p ~/.dsh/patches ~/.dsh/autostart ~/.dsh/config
-# 从仓库下载(示例用 api 端点,实际以仓库为准):
+# 脚本来源（仓库 scripts/ 目录，MIT 许可）：
 #   scripts/start-dsh-web.sh           -> ~/.dsh/start-dsh-web.sh
 #   scripts/reapply-koffi-patch.sh     -> ~/.dsh/patches/reapply-koffi-patch.sh
 #   scripts/dsh-autostart.sh           -> ~/.dsh/autostart/dsh-autostart.sh
@@ -211,3 +218,74 @@ tail -50 ~/.dsh/dsh-web-8080.log                # 看日志
 2. **`--ignore-scripts` 安装**,原生模块(koffi)不编译、只补丁;
 3. **所有 node_modules 内的补丁升级后都会丢**,按第五节清单重做;
 4. hmfs 的三个特殊性:**禁硬链接、强制 660、chmod 无效**,遇到权限类报错优先想到它们。
+
+
+---
+
+## 附录：开机自启配置与补充经验（提炼自 dsh-harmonyos-deploy）
+
+> 本节内容提炼自 [dsh-harmonyos-deploy](https://atomgit.com/u010189254/dsh-harmonyos-deploy)
+> （MIT License，Copyright (c) 2026 dsh-harmonyos-deploy contributors）。
+
+### A. 开机自启方案（四层钩子，全部幂等）
+
+鸿蒙的开机自启设置"只认软件（hap 应用）"，命令行脚本只能借道登录 shell 钩子：
+
+| 层级 | 位置 | 触发时机 |
+|---|---|---|
+| 系统 profile | `/etc/profile` → `/data/service/el1/public/startup/profile`（sudo 写入） | 所有 sh 类登录 shell |
+| zsh 环境 | `~/.zshenv` + `~/.zshrc` | zsh 每次启动 |
+| bash | `~/.bashrc` + `~/.profile` | bash 登录/交互 |
+| XDG | `~/.config/autostart/dsh-web.desktop` | 桌面环境（兼容备用，鸿蒙桌面实际不执行） |
+
+核心脚本 `scripts/dsh-autostart.sh`：HTTP 探活（幂等）→ **mkdir 原子锁**（零外部依赖，带持锁者存活检测）→ setsid 常驻 → 60s 就绪等待。
+
+安装：`sh ~/.dsh/autostart/install-autostart.sh`
+
+系统级钩子（可选，需 sudo；鸿蒙 Toybox sudo 不支持 `-n`/`-i`，基础用法免密可用）：
+
+```sh
+# 注意：sudo 里 $HOME 是 root 的，下面的 <用户主目录> 必须换成字面路径
+sudo sh -c 'grep -q "dsh web autostart" /data/service/el1/public/startup/profile || printf "\n# dsh web autostart (system profile hook)\n[ -x <用户主目录>/.dsh/autostart/dsh-autostart.sh ] && <用户主目录>/.dsh/autostart/dsh-autostart.sh >/dev/null 2>&1 &\n" >> /data/service/el1/public/startup/profile'
+# 修改前先备份：cp /data/service/el1/public/startup/profile ~/.dsh/patches/startup-profile.bak
+```
+
+**实测局限（诚实说明）**：钩子本身全部生效（登录 shell 一执行，2~5 秒就绪）；
+但鸿蒙 HiShell 开机自启打开的是 **Alpine/ttyAMA0 root 调试会话**（横幅显示
+`Welcome to Alpine Linux of HiSH!`，环境其实是主系统、uid 仍是普通用户），且
+**HiShell 开机后有 1~3 分钟延迟**，有时需手动点开一次 HiShell 才触发。
+最可靠做法：重启后手动执行 `sh ~/.dsh/autostart/dsh-autostart.sh`。
+
+### B. last-run.log 语义（排查自启问题必读）
+
+`~/.dsh/autostart/last-run.log` 记录每次钩子执行去向：
+
+| 记录 | 含义 | 下一步 |
+|---|---|---|
+| `already-running` | 探活通过，服务在跑 | 无需操作 |
+| `locked-by-other` | 另一个实例正在启动 | 等几秒再查 8080 |
+| `pid-alive, skip` | pid 文件显示已有实例 | 检查 pid 是否僵尸 |
+| `launched pid=...` | 已启动 dsh 进程 | 等 60 秒内就绪 |
+| `started OK` | 服务就绪 | 访问 8080 |
+| `TIMEOUT` | 60 秒未就绪 | 看 dsh-web-8080.log 报错 |
+| `dsh-bin-missing` | dsh 路径不存在 | 重装 dsh |
+
+### C. 补充踩坑（原速查表未覆盖）
+
+| 现象 | 原因 | 解决 |
+|---|---|---|
+| 自启脚本静默失败，日志全是 `locked-by-other, skip` | `flock` 只装在 harmonybrew，不在系统 PATH（/usr/bin:/bin），返回 127 被误判为"锁被占" | 改用 **mkdir 原子锁**（/bin/mkdir 在系统路径）+ 脚本固定 PATH + 每个分支写日志 |
+| `df` 显示 /storage/Users 只有 12GB tmpfs | 覆盖挂载假象 | 实际数据在 hmfs 持久分区（~450GB），重启不丢数据 |
+| `~/.hdc/` 调试日志爆炸（每小时 100MB） | hdc 默认开 debug | 定期清理旧日志 |
+| `head -n -5` 不支持 / `whoami` 缺失 / `/tmp` 只读 | Toybox 精简工具集 | 用 `ls \| tail -5`、`cat /proc/self/status \| grep Uid`、用户目录替代 |
+| 内存紧张 | WorkBuddy/浏览器等常驻占大头 | 跑大任务前关闭不用的常驻应用 |
+
+### D. 日常命令速查
+
+```sh
+sh ~/.dsh/autostart/dsh-autostart.sh   # 幂等启动/自启
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/   # 验证 200
+cat ~/.dsh/autostart/last-run.log      # 自启记录
+tail -50 ~/.dsh/dsh-web-8080.log       # dsh 日志
+sh ~/.dsh/patches/reapply-koffi-patch.sh  # dsh 升级后重放补丁
+```

@@ -7,6 +7,11 @@
 
 ---
 
+> **内容来源与署名**：本文「附录」的操作方法与脚本说明提炼自
+> [dsh-harmonyos-deploy](https://atomgit.com/u010189254/dsh-harmonyos-deploy)
+> （MIT License，Copyright (c) 2026 dsh-harmonyos-deploy contributors）。
+> 使用其中内容时请保留本署名与原始许可说明。
+
 ## 0. 环境事实(先读,避免走弯路)
 
 | 事实 | 含义 |
@@ -37,11 +42,13 @@ npm config get registry        # 期望输出 https://registry.npmmirror.com/
 
 ## 2. 部署辅助脚本
 
-创建目录并放置脚本(来源:GitHub 仓库 `dsh-harmonyos-deploy` 的 scripts/ 与 config/):
+创建目录并放置脚本(来源:[dsh-harmonyos-deploy](https://atomgit.com/u010189254/dsh-harmonyos-deploy)
+的 scripts/ 与 config/ 目录,MIT License,Copyright (c) 2026 dsh-harmonyos-deploy contributors):
 
 ```sh
 mkdir -p ~/.dsh/patches ~/.dsh/autostart ~/.dsh/config
-# 依次下载到(用你习惯的方式,如 git clone 后复制,或 curl 对应 raw 地址):
+# 获取方式: git clone https://atomgit.com/u010189254/dsh-harmonyos-deploy.git 后复制
+# 依次放置到:
 #   scripts/start-dsh-web.sh       -> ~/.dsh/start-dsh-web.sh
 #   scripts/reapply-koffi-patch.sh -> ~/.dsh/patches/reapply-koffi-patch.sh
 #   scripts/dsh-autostart.sh       -> ~/.dsh/autostart/dsh-autostart.sh
@@ -263,3 +270,59 @@ sh ~/.dsh/start-dsh-web.sh
 - 本文档对应的中文人类版:`dsh-harmonyos-install-guide.md`(同目录)
 
 **交付完成标志:第 10 节完整验证 3 项全部通过。**
+
+
+---
+
+## 附录：自启配置与兼容层（提炼自 dsh-harmonyos-deploy）
+
+> 本节提炼自 [dsh-harmonyos-deploy](https://atomgit.com/u010189254/dsh-harmonyos-deploy)
+> （MIT License，Copyright (c) 2026 dsh-harmonyos-deploy contributors）。
+
+### A. 沙箱兼容环境变量（启动前必须设置）
+
+HarmonyOS 不在 dsh 沙箱平台链，confine 会抛 SandboxUnavailableError。启动 dsh web
+前先确认：
+
+```sh
+export DSH_PERMISSION_MODE=danger-full-access   # 命令直跑（无审批）
+```
+
+> ⚠️ 风险：rm、网络请求等无保护；建议定期备份 ~/.dsh。
+
+### B. 开机自启（四层钩子）
+
+```sh
+sh ~/.dsh/autostart/install-autostart.sh   # 安装 zsh/bash/XDG 钩子（幂等）
+```
+
+系统级钩子（可选，sudo 写 /etc/profile 源；sudo 内 $HOME 是 root 的，路径必须字面化）：
+
+```sh
+sudo sh -c 'grep -q "dsh web autostart" /data/service/el1/public/startup/profile || printf "\n# dsh web autostart (system profile hook)\n[ -x <用户主目录>/.dsh/autostart/dsh-autostart.sh ] && <用户主目录>/.dsh/autostart/dsh-autostart.sh >/dev/null 2>&1 &\n" >> /data/service/el1/public/startup/profile'
+```
+
+### C. 自启验证与日志语义
+
+```sh
+cat ~/.dsh/autostart/last-run.log   # 期望 started OK
+curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8080/   # 期望 200
+```
+
+| last-run.log 记录 | 含义 |
+|---|---|
+| `already-running` | 已在运行 |
+| `locked-by-other` | 并发启动被另一实例持有锁 |
+| `launched pid=...` → `started OK` | 启动链路正常 |
+| `TIMEOUT` | 60s 未就绪，查 dsh-web-8080.log |
+| `dsh-bin-missing` | dsh 路径不对 |
+
+### D. 补充故障（原表未覆盖）
+
+| 报错/现象 | 原因 | 处理 |
+|---|---|---|
+| 自启日志全是 `locked-by-other, skip` 且服务没起 | flock 不在系统 PATH，127 被误判 | 用 mkdir 原子锁版本脚本；脚本内固定 PATH |
+| 开机后 HiShell 显示 Alpine 横幅 | ttyAMA0 调试会话横幅，环境仍是主系统 | 忽略横幅；钩子要放 `/etc/profile` 系统级才全局生效 |
+| HiShell 开机自启有 1~3 分钟延迟 | 系统行为 | 接受延迟，或重启后手动跑一次 autostart 脚本 |
+| `df` 显示 /storage/Users 12GB | tmpfs 覆盖挂载假象 | 实际 hmfs 持久分区，不丢数据 |
+| `~/.hdc/` 日志爆炸 | hdc debug 日志 | 定期清理旧日志 |
