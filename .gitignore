@@ -1,0 +1,9 @@
+/node_modules
+/oh_modules
+/.hvigor
+/.bitfun
+/build
+/.cxx
+entry/build
+entry/.cxx
+local.properties

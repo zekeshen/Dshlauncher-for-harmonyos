@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "DSH Launcher 主模块"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "DSH Web GUI 启动器"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "DSH Launcher"
+    }
+  ]
+}
