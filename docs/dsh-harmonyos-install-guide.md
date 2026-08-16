@@ -57,7 +57,7 @@ sh ~/.dsh/start-dsh-web.sh
 
 ## 三、完整安装步骤(含脚本部署)
 
-### 3.1 部署辅助脚本(从 GitHub 仓库获取)
+### 3.1 部署辅助脚本(从 dsh-harmonyos-deploy 仓库获取)
 
 参考仓库:[dsh-harmonyos-deploy](https://atomgit.com/u010189254/dsh-harmonyos-deploy)
 (MIT License,Copyright (c) 2026 dsh-harmonyos-deploy contributors)。
